@@ -1,5 +1,6 @@
 import { Post } from "@prisma/client";
 import { Context } from "../../index";
+import { canUserMutatePost } from "../../utils";
 
 interface PostArgs {
   post: {
@@ -19,8 +20,19 @@ export const postResolvers = {
   postCreate: async (
     parent: any,
     { post: { title, content } }: PostArgs,
-    { prisma }: Context
+    { prisma, userInfo }: Context
   ): Promise<PostPayloadType> => {
+    if (!userInfo) {
+      return {
+        userErrors: [
+          {
+            message: "Forbidden access (unauthenticated)",
+          },
+        ],
+        post: null,
+      };
+    }
+
     if (!title || !content) {
       return {
         userErrors: [
@@ -36,7 +48,7 @@ export const postResolvers = {
       data: {
         title,
         content,
-        authorId: 1,
+        authorId: userInfo.userId,
       },
     });
 
@@ -48,8 +60,27 @@ export const postResolvers = {
   postUpdate: async (
     parent: any,
     { postId, post }: { postId: string; post: PostArgs["post"] },
-    { prisma }: Context
+    { prisma, userInfo }: Context
   ): Promise<PostPayloadType> => {
+    if (!userInfo) {
+      return {
+        userErrors: [
+          {
+            message: "Forbidden access (unauthenticated)",
+          },
+        ],
+        post: null,
+      };
+    }
+
+    const error = await canUserMutatePost({
+      userId: userInfo.userId,
+      postId: Number(postId),
+      prisma,
+    });
+
+    if (error) return error;
+
     const { title, content } = post;
     if (!title && !content) {
       return {
@@ -90,11 +121,23 @@ export const postResolvers = {
     const updatedPost = await prisma.post.update({
       where: {
         id: Number(postId),
+        authorId: Number(userInfo.userId),
       },
       data: {
         ...payloadToUpdate,
       },
     });
+
+    if (!updatedPost) {
+      return {
+        userErrors: [
+          {
+            message: "Forbidden access (unauthenticated)",
+          },
+        ],
+        post: null,
+      };
+    }
 
     return {
       userErrors: [],
@@ -104,8 +147,27 @@ export const postResolvers = {
   postDelete: async (
     parent: any,
     { postId }: { postId: string },
-    { prisma }: Context
+    { prisma, userInfo }: Context
   ): Promise<PostPayloadType> => {
+    if (!userInfo) {
+      return {
+        userErrors: [
+          {
+            message: "Forbidden access (unauthenticated)",
+          },
+        ],
+        post: null,
+      };
+    }
+
+    const error = await canUserMutatePost({
+      userId: userInfo.userId,
+      postId: Number(postId),
+      prisma,
+    });
+
+    if (error) return error;
+
     const existingPost = await prisma.post.findUnique({
       where: {
         id: Number(postId),
@@ -128,6 +190,8 @@ export const postResolvers = {
         id: Number(postId),
       },
     });
+
+    console.log("Deleted Post:", deletedPost);
 
     return {
       userErrors: [],
