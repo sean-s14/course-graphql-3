@@ -1,9 +1,11 @@
 import { Post } from "@prisma/client";
 import { Context } from "../index";
 
-interface PostCreateArgs {
-  title: string;
-  content: string;
+interface PostArgs {
+  post: {
+    title?: string;
+    content?: string;
+  };
 }
 
 interface PostPayloadType {
@@ -16,7 +18,7 @@ interface PostPayloadType {
 export const Mutation = {
   postCreate: async (
     parent: any,
-    { title, content }: PostCreateArgs,
+    { post: { title, content } }: PostArgs,
     { prisma }: Context
   ): Promise<PostPayloadType> => {
     if (!title || !content) {
@@ -41,6 +43,62 @@ export const Mutation = {
     return {
       userErrors: [],
       post,
+    };
+  },
+  postUpdate: async (
+    parent: any,
+    { postId, post }: { postId: string; post: PostArgs["post"] },
+    { prisma }: Context
+  ): Promise<PostPayloadType> => {
+    const { title, content } = post;
+    if (!title && !content) {
+      return {
+        userErrors: [
+          {
+            message: "Need to have at least one field to update",
+          },
+        ],
+        post: null,
+      };
+    }
+
+    const existingPost = await prisma.post.findUnique({
+      where: {
+        id: Number(postId),
+      },
+    });
+
+    if (!existingPost) {
+      return {
+        userErrors: [
+          {
+            message: "Post does not exist",
+          },
+        ],
+        post: null,
+      };
+    }
+
+    let payloadToUpdate = {
+      title,
+      content,
+    };
+
+    if (!title) delete payloadToUpdate.title;
+    if (!content) delete payloadToUpdate.content;
+
+    const updatedPost = await prisma.post.update({
+      where: {
+        id: Number(postId),
+      },
+      data: {
+        ...payloadToUpdate,
+      },
+    });
+
+    return {
+      userErrors: [],
+      post: updatedPost,
     };
   },
 };
