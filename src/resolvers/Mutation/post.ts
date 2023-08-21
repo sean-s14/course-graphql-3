@@ -93,23 +93,6 @@ export const postResolvers = {
       };
     }
 
-    const existingPost = await prisma.post.findUnique({
-      where: {
-        id: Number(postId),
-      },
-    });
-
-    if (!existingPost) {
-      return {
-        userErrors: [
-          {
-            message: "Post does not exist",
-          },
-        ],
-        post: null,
-      };
-    }
-
     let payloadToUpdate = {
       title,
       content,
@@ -168,23 +151,6 @@ export const postResolvers = {
 
     if (error) return error;
 
-    const existingPost = await prisma.post.findUnique({
-      where: {
-        id: Number(postId),
-      },
-    });
-
-    if (!existingPost) {
-      return {
-        userErrors: [
-          {
-            message: "Post does not exist",
-          },
-        ],
-        post: null,
-      };
-    }
-
     const deletedPost = await prisma.post.delete({
       where: {
         id: Number(postId),
@@ -196,6 +162,82 @@ export const postResolvers = {
     return {
       userErrors: [],
       post: deletedPost,
+    };
+  },
+  postPublish: async (
+    parent: any,
+    { postId }: { postId: string },
+    { prisma, userInfo }: Context
+  ): Promise<PostPayloadType> => {
+    if (!userInfo) {
+      return {
+        userErrors: [
+          {
+            message: "Forbidden access (unauthenticated)",
+          },
+        ],
+        post: null,
+      };
+    }
+
+    const error = await canUserMutatePost({
+      userId: userInfo.userId,
+      postId: Number(postId),
+      prisma,
+    });
+
+    if (error) return error;
+
+    const publishedPost = await prisma.post.update({
+      where: {
+        id: Number(postId),
+      },
+      data: {
+        published: true,
+      },
+    });
+
+    return {
+      userErrors: [],
+      post: publishedPost,
+    };
+  },
+  postUnpublish: async (
+    parent: any,
+    { postId }: { postId: string },
+    { prisma, userInfo }: Context
+  ): Promise<PostPayloadType> => {
+    if (!userInfo) {
+      return {
+        userErrors: [
+          {
+            message: "Forbidden access (unauthenticated)",
+          },
+        ],
+        post: null,
+      };
+    }
+
+    const error = await canUserMutatePost({
+      userId: userInfo.userId,
+      postId: Number(postId),
+      prisma,
+    });
+
+    if (error) return error;
+
+    const unpublishedPost = await prisma.post.update({
+      where: {
+        id: Number(postId),
+      },
+      data: {
+        published: false,
+      },
+    });
+
+    return {
+      userErrors: [],
+      post: unpublishedPost,
     };
   },
 };
